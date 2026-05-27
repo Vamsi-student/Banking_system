@@ -3,6 +3,14 @@ import jwt from "jsonwebtoken";
 import {sendRegistrationEmail} from "../services/email.service.js";
 import tokenBlackListModel from "../models/BlackList.model.js";
 
+const COOKIE_OPTIONS = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: 3 * 24 * 60 * 60 * 1000,
+    path: "/"
+}
+
 /**
 * - user register controller
 * - POST /api/auth/register
@@ -27,7 +35,7 @@ export async function userRegisterController(req, res) {
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: "3d" })
 
-    res.cookie("token", token)
+    res.cookie("token", token, COOKIE_OPTIONS)
 
     res.status(201).json({
         user: {
@@ -67,7 +75,7 @@ export async function userLoginController(req,res){
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: "3d" })
 
-    res.cookie("token", token)
+    res.cookie("token", token, COOKIE_OPTIONS)
 
     res.status(200).json({
         user: {
@@ -95,7 +103,7 @@ export async function userLogoutController(req, res) {
         token: token
     })
 
-    res.clearCookie("token")
+    res.clearCookie("token", { path: "/" })
 
     res.status(200).json({
         message: "User logged out successfully"

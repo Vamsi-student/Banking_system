@@ -1,19 +1,21 @@
+import mongoose from "mongoose";
 import transactionModel from "../models/transaction.model.js";
+import accountModel from "../models/account.model.js";
 import ledgerModel from "../models/ledger.model.js";
-import { sendTransactionEmail,sendTransactionFailureEmail } from "../services/email.service.js";
+import { sendTransactionEmail, sendTransactionFailureEmail } from "../services/email.service.js";
 
 /**
  * - Create a new transaction
- * THE 10-STEP TRANSFER FLOW:
+ * THE TRANSFER FLOW:
      * 1. Validate request
      * 2. Validate idempotency key
      * 3. Check account status
-     * 4. Derive sender balance from ledger
-     * 5. Create transaction (PENDING)
-     * 6. Create DEBIT ledger entry
-     * 7. Create CREDIT ledger entry
-     * 8. Mark transaction COMPLETED
-     * 9. Commit MongoDB session
+     * 4. Start MongoDB transaction
+     * 5. Atomically deduct balance (findOneAndUpdate with balance guard)
+     * 6. Atomically credit receiver
+     * 7. Create transaction document (PENDING)
+     * 8. Create DEBIT + CREDIT ledger entries
+     * 9. Mark transaction COMPLETED → commit
      * 10. Send email notification
  */
 
@@ -84,27 +86,44 @@ export async function createTransaction(req,res) {
         })
     }
 
-    /**
-     * 4. Derive sender balance from ledger
-     */
-    const balance = await fromUserAccount.getBalance()
-
-    if (balance < amount) {
-        return res.status(400).json({
-            message: `Insufficient balance. Current balance is ${balance}. Requested amount is ${amount}`
-        })
-    }
-
-     let transaction;
+     let session;
+    let transaction;
     try {
-
-
-        /**
-         * 5. Create transaction (PENDING)
-         */
-        const session = await mongoose.startSession()
+        session = await mongoose.startSession()
         session.startTransaction()
 
+        /**
+         * 4. Atomically deduct balance from sender
+         * findOneAndUpdate with { balance: { $gte: amount } } is the critical guard:
+         * - If balance is sufficient, atomically subtracts amount
+         * - If balance is insufficient, returns null
+         * - MongoDB's transaction write-conflict detection prevents concurrent TX1
+         */
+        const deductedAccount = await accountModel.findOneAndUpdate(
+            { _id: fromAccount, balance: { $gte: amount } },
+            { $inc: { balance: -amount } },
+            { session, new: true }
+        )
+
+        if (!deductedAccount) {
+            await session.abortTransaction()
+            return res.status(400).json({
+                message: `Insufficient balance. Requested amount is ${amount}`
+            })
+        }
+
+        /**
+         * 5. Atomically credit receiver
+         */
+        await accountModel.findOneAndUpdate(
+            { _id: toAccount },
+            { $inc: { balance: amount } },
+            { session }
+        )
+
+        /**
+         * 6. Create transaction document (PENDING)
+         */
         transaction = (await transactionModel.create([ {
             fromAccount,
             toAccount,
@@ -113,44 +132,54 @@ export async function createTransaction(req,res) {
             status: "PENDING"
         } ], { session }))[ 0 ]
 
-        const debitLedgerEntry = await ledgerModel.create([ {
+        /**
+         * 7. Create DEBIT ledger entry
+         */
+        await ledgerModel.create([ {
             account: fromAccount,
             amount: amount,
             transaction: transaction._id,
             type: "DEBIT"
         } ], { session })
 
-        await (() => {
-            return new Promise((resolve) => setTimeout(resolve, 15 * 1000));
-        })()
-
-        const creditLedgerEntry = await ledgerModel.create([ {
+        /**
+         * 8. Create CREDIT ledger entry
+         */
+        await ledgerModel.create([ {
             account: toAccount,
             amount: amount,
             transaction: transaction._id,
             type: "CREDIT"
         } ], { session })
 
+        /**
+         * 9. Mark transaction COMPLETED
+         */
         await transactionModel.findOneAndUpdate(
             { _id: transaction._id },
             { status: "COMPLETED" },
             { session }
         )
 
-
         await session.commitTransaction()
-        session.endSession()
     } catch (error) {
+        if (session) {
+            await session.abortTransaction()
+        }
 
         return res.status(400).json({
             message: "Transaction is Pending due to some issue, please retry after sometime",
         })
 
+    } finally {
+        if (session) {
+            session.endSession()
+        }
     }
     /**
      * 10. Send email notification
      */
-    await emailService.sendTransactionEmail(req.user.email, req.user.name, amount, toAccount)
+    await sendTransactionEmail(req.user.email, req.user.name, amount, toAccount)
 
     return res.status(201).json({
         message: "Transaction completed successfully",
@@ -190,36 +219,71 @@ export async function createInitialFundsTransaction(req, res) {
     }
 
 
-    const session = await mongoose.startSession()
-    session.startTransaction()
+    let session;
+    let transaction;
 
-    const transaction = new transactionModel({
-        fromAccount: fromUserAccount._id,
-        toAccount,
-        amount,
-        idempotencyKey,
-        status: "PENDING"
-    })
+    try {
+        session = await mongoose.startSession()
+        session.startTransaction()
 
-    const debitLedgerEntry = await ledgerModel.create([ {
-        account: fromUserAccount._id,
-        amount: amount,
-        transaction: transaction._id,
-        type: "DEBIT"
-    } ], { session })
+        const deductedAccount = await accountModel.findOneAndUpdate(
+            { _id: fromUserAccount._id, balance: { $gte: amount } },
+            { $inc: { balance: -amount } },
+            { session, new: true }
+        )
 
-    const creditLedgerEntry = await ledgerModel.create([ {
-        account: toAccount,
-        amount: amount,
-        transaction: transaction._id,
-        type: "CREDIT"
-    } ], { session })
+        if (!deductedAccount) {
+            await session.abortTransaction()
+            return res.status(400).json({
+                message: "Insufficient balance in system account"
+            })
+        }
 
-    transaction.status = "COMPLETED"
-    await transaction.save({ session })
+        await accountModel.findOneAndUpdate(
+            { _id: toAccount },
+            { $inc: { balance: amount } },
+            { session }
+        )
 
-    await session.commitTransaction()
-    session.endSession()
+        transaction = new transactionModel({
+            fromAccount: fromUserAccount._id,
+            toAccount,
+            amount,
+            idempotencyKey,
+            status: "PENDING"
+        })
+
+        await ledgerModel.create([ {
+            account: fromUserAccount._id,
+            amount: amount,
+            transaction: transaction._id,
+            type: "DEBIT"
+        } ], { session })
+
+        await ledgerModel.create([ {
+            account: toAccount,
+            amount: amount,
+            transaction: transaction._id,
+            type: "CREDIT"
+        } ], { session })
+
+        transaction.status = "COMPLETED"
+        await transaction.save({ session })
+
+        await session.commitTransaction()
+    } catch (error) {
+        if (session) {
+            await session.abortTransaction()
+        }
+
+        return res.status(400).json({
+            message: "Initial funds transaction failed, please retry"
+        })
+    } finally {
+        if (session) {
+            session.endSession()
+        }
+    }
 
     return res.status(201).json({
         message: "Initial funds transaction completed successfully",
