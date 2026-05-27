@@ -33,6 +33,7 @@ export async function createTransaction(req,res) {
 
     const fromUserAccount = await accountModel.findOne({
         _id: fromAccount,
+        user: req.user._id
     })
 
     const toUserAccount = await accountModel.findOne({
@@ -167,8 +168,10 @@ export async function createTransaction(req,res) {
             await session.abortTransaction()
         }
 
+        console.error("Transaction failed:", error)
+
         return res.status(400).json({
-            message: "Transaction is Pending due to some issue, please retry after sometime",
+            message: "Transaction failed, please retry with the same idempotency key",
         })
 
     } finally {
@@ -177,14 +180,15 @@ export async function createTransaction(req,res) {
         }
     }
     /**
-     * 10. Send email notification
+     * 10. Respond first, then send email asynchronously
      */
-    await sendTransactionEmail(req.user.email, req.user.name, amount, toAccount)
-
-    return res.status(201).json({
+    res.status(201).json({
         message: "Transaction completed successfully",
         transaction: transaction
     })
+
+    sendTransactionEmail(req.user.email, req.user.name, amount, toAccount)
+        .catch(err => console.error("Failed to send transaction email:", err))
 
 
 }
@@ -276,8 +280,10 @@ export async function createInitialFundsTransaction(req, res) {
             await session.abortTransaction()
         }
 
+        console.error("Initial funds transaction failed:", error)
+
         return res.status(400).json({
-            message: "Initial funds transaction failed, please retry"
+            message: "Initial funds transaction failed, please retry with the same idempotency key"
         })
     } finally {
         if (session) {
