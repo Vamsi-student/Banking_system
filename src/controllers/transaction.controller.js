@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import transactionModel from "../models/transaction.model.js";
 import accountModel from "../models/account.model.js";
 import ledgerModel from "../models/ledger.model.js";
-import { sendTransactionEmail, sendTransactionFailureEmail } from "../services/email.service.js";
+import { sendTransactionEmail } from "../services/email.service.js";
 
 /**
  * - Create a new transaction
@@ -27,7 +27,13 @@ export async function createTransaction(req,res) {
 
     if (!fromAccount || !toAccount || !amount || !idempotencyKey) {
         return res.status(400).json({
-            message: "FromAccount, toAccount, amount and idempotencyKey are required"
+            message: "fromAccount, toAccount, amount and idempotencyKey are required"
+        })
+    }
+
+    if (typeof amount !== "number" || amount <= 0) {
+        return res.status(400).json({
+            message: "Amount must be a positive number"
         })
     }
 
@@ -43,6 +49,12 @@ export async function createTransaction(req,res) {
     if (!fromUserAccount || !toUserAccount) {
         return res.status(400).json({
             message: "Invalid fromAccount or toAccount"
+        })
+    }
+
+    if (fromAccount === toAccount) {
+        return res.status(400).json({
+            message: "Sender and receiver accounts must be different"
         })
     }
     /**
