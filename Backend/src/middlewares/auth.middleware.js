@@ -25,7 +25,19 @@ export async function authMiddleware(req, res, next) {
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET)
 
+        if (decoded.type && decoded.type !== "access") {
+            return res.status(401).json({
+                message: "Unauthorized access, invalid token type"
+            })
+        }
+
         const user = await userModel.findById(decoded.userId)
+
+        if (!user) {
+            return res.status(401).json({
+                message: "User no longer exists"
+            })
+        }
 
         req.user = user
 
@@ -60,7 +72,20 @@ export async function authSystemUserMiddleware(req, res, next) {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET)
 
+        if (decoded.type && decoded.type !== "access") {
+            return res.status(401).json({
+                message: "Unauthorized access, invalid token type"
+            })
+        }
+
         const user = await userModel.findById(decoded.userId).select("+systemUser")
+
+        if (!user) {
+            return res.status(401).json({
+                message: "User no longer exists"
+            })
+        }
+
         if (!user.systemUser) {
             return res.status(403).json({
                 message: "Forbidden access, not a system user"

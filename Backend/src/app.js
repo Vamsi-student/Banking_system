@@ -40,30 +40,48 @@ app.use(cookieParser());
  * 4. Global rate limiter
  * Catches general API abuse — 100 requests per 15 minutes per IP.
  * Still generous enough for legitimate users but stops aggressive scraping.
+ * Skipped in test mode so integration tests can make unlimited setup calls.
  */
-const globalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { message: "Too many requests, please try again later" }
-})
-app.use(globalLimiter)
+if (process.env.NODE_ENV !== "test") {
+    const globalLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 100,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: { message: "Too many requests, please try again later" }
+    })
+    app.use(globalLimiter)
 
-/**
- * 5. Auth-specific rate limiter (stricter)
- * 15 requests per 15 minutes for login/register endpoints.
- * This runs ON TOP of the global limiter — the stricter limit (15) wins.
- * Prevents brute-force password guessing and mass account creation.
- */
-const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 15,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { message: "Too many login attempts, please try again later" }
-})
-app.use("/api/auth", authLimiter)
+    /**
+     * 5. Per-endpoint rate limiters (stricter)
+     * Different limits for login, register, and refresh to prevent
+     * brute-force attacks, mass account creation, and token abuse.
+     */
+    const loginLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 10,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: { message: "Too many login attempts, please try again later" }
+    })
+    const registerLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 5,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: { message: "Too many registration attempts, please try again later" }
+    })
+    const refreshLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 10,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: { message: "Too many token refresh attempts, please try again later" }
+    })
+    app.use("/api/auth/login", loginLimiter)
+    app.use("/api/auth/register", registerLimiter)
+    app.use("/api/auth/refresh", refreshLimiter)
+}
 
 /**
  * 6. Route handlers

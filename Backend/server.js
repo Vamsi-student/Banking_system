@@ -1,6 +1,16 @@
 import { configDotenv } from "dotenv";
 configDotenv();
 
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+    console.error("FATAL: JWT_SECRET must be set and at least 32 characters long")
+    process.exit(1)
+}
+
+if (!process.env.JWT_REFRESH_SECRET || process.env.JWT_REFRESH_SECRET.length < 32) {
+    console.error("FATAL: JWT_REFRESH_SECRET must be set and at least 32 characters long")
+    process.exit(1)
+}
+
 import dns from "dns";
 dns.setServers(["8.8.8.8", "8.8.4.4"]);
 

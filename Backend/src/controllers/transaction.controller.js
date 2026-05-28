@@ -25,7 +25,7 @@ export async function createTransaction(req,res) {
      */
     const { fromAccount, toAccount, amount, idempotencyKey } = req.body
 
-    if (!fromAccount || !toAccount || !amount || !idempotencyKey) {
+    if (!fromAccount || !toAccount || amount == null || !idempotencyKey) {
         return res.status(400).json({
             message: "fromAccount, toAccount, amount and idempotencyKey are required"
         })
@@ -115,7 +115,7 @@ export async function createTransaction(req,res) {
         const deductedAccount = await accountModel.findOneAndUpdate(
             { _id: fromAccount, balance: { $gte: amount } },
             { $inc: { balance: -amount } },
-            { session, new: true }
+            { session, returnDocument: "after" }
         )
 
         if (!deductedAccount) {
@@ -245,7 +245,7 @@ export async function createInitialFundsTransaction(req, res) {
         const deductedAccount = await accountModel.findOneAndUpdate(
             { _id: fromUserAccount._id, balance: { $gte: amount } },
             { $inc: { balance: -amount } },
-            { session, new: true }
+            { session, returnDocument: "after" }
         )
 
         if (!deductedAccount) {
