@@ -10,6 +10,7 @@ import Dashboard from "@/pages/Dashboard"
 import Accounts from "@/pages/Accounts"
 import AccountDetail from "@/pages/AccountDetail"
 import Transfer from "@/pages/Transfer"
+import Transactions from "@/pages/Transactions"
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,6 +51,7 @@ function AppRoutes() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/accounts/:id" element={<AccountDetail />} />
+          <Route path="/transactions" element={<Transactions />} />
           <Route path="/transfer" element={<Transfer />} />
         </Route>
       </Route>

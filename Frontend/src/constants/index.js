@@ -6,6 +6,7 @@ export const ROUTES = {
   DASHBOARD: "/",
   ACCOUNTS: "/accounts",
   ACCOUNT_DETAIL: "/accounts/:id",
+  TRANSACTIONS: "/transactions",
   TRANSFER: "/transfer",
 }
 
@@ -23,6 +24,7 @@ export const ACCOUNT_ROUTES = {
 }
 
 export const TRANSACTION_ROUTES = {
+  HISTORY: "/transactions",
   CREATE: "/transactions",
   SYSTEM_INITIAL_FUNDS: "/transactions/system/initial-funds",
 }

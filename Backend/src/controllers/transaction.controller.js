@@ -205,6 +205,28 @@ export async function createTransaction(req,res) {
 
 }
 
+export async function getTransactionHistory(req, res) {
+    const userAccounts = await accountModel.find({ user: req.user._id }).select("_id")
+    const accountIds = userAccounts.map((a) => a._id)
+
+    const transactions = await transactionModel
+        .find({
+            $or: [
+                { fromAccount: { $in: accountIds } },
+                { toAccount: { $in: accountIds } },
+            ],
+        })
+        .sort({ createdAt: -1 })
+        .lean()
+
+    const enriched = transactions.map((tx) => ({
+        ...tx,
+        isDebit: accountIds.some((id) => id.equals(tx.fromAccount)),
+    }))
+
+    return res.status(200).json({ transactions: enriched })
+}
+
 export async function createInitialFundsTransaction(req, res) {
     const { toAccount, amount, idempotencyKey } = req.body
 

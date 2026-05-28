@@ -19,6 +19,7 @@ export const accountApi = {
 }
 
 export const transactionApi = {
+  getHistory: () => api.get(TRANSACTION_ROUTES.HISTORY),
   create: (data) => api.post(TRANSACTION_ROUTES.CREATE, data),
   systemInitialFunds: (data) =>
     api.post(TRANSACTION_ROUTES.SYSTEM_INITIAL_FUNDS, data),

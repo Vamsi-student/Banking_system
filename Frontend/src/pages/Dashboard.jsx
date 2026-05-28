@@ -1,6 +1,9 @@
+import { useState } from "react"
 import { useAuth } from "@/hooks/useAuth"
 import { useAccounts, useCreateAccount } from "@/hooks/useAccounts"
+import { useCreateInitialFunds } from "@/hooks/useTransactions"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Card,
   CardContent,
@@ -8,16 +11,20 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Wallet } from "lucide-react"
+import { Plus, Wallet, Banknote } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const isSystemUser = user?.systemUser
   const { data: accounts, isLoading } = useAccounts()
   const createAccount = useCreateAccount()
+  const initialFunds = useCreateInitialFunds()
   const navigate = useNavigate()
+  const [fundTarget, setFundTarget] = useState("")
+  const [fundAmount, setFundAmount] = useState("")
 
   const handleCreateAccount = () => {
     createAccount.mutate(undefined, {
@@ -95,6 +102,68 @@ export default function Dashboard() {
             </Card>
           ))}
         </div>
+      )}
+
+      {isSystemUser && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Banknote className="h-5 w-5 text-muted-foreground" />
+              <CardTitle className="text-lg">Send Initial Funds</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                initialFunds.mutate(
+                  { toAccount: fundTarget, amount: Number(fundAmount) },
+                  {
+                    onSuccess: () => {
+                      toast.success("Initial funds sent")
+                      setFundTarget("")
+                      setFundAmount("")
+                    },
+                    onError: (err) =>
+                      toast.error(
+                        err.response?.data?.message || "Failed to send funds"
+                      ),
+                  }
+                )
+              }}
+              className="flex flex-wrap items-end gap-3"
+            >
+              <div className="flex-1 space-y-1">
+                <label className="text-xs text-muted-foreground">
+                  Target Account ID
+                </label>
+                <Input
+                  value={fundTarget}
+                  onChange={(e) => setFundTarget(e.target.value)}
+                  placeholder="Account ID"
+                  required
+                />
+              </div>
+              <div className="w-32 space-y-1">
+                <label className="text-xs text-muted-foreground">
+                  Amount (₹)
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={fundAmount}
+                  onChange={(e) => setFundAmount(e.target.value)}
+                  placeholder="1000"
+                  required
+                />
+              </div>
+              <Button type="submit" disabled={initialFunds.isPending}>
+                Send Funds
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       )}
     </div>
   )

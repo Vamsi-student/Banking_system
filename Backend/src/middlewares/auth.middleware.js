@@ -31,7 +31,7 @@ export async function authMiddleware(req, res, next) {
             })
         }
 
-        const user = await userModel.findById(decoded.userId)
+        const user = await userModel.findById(decoded.userId).select("+systemUser")
 
         if (!user) {
             return res.status(401).json({

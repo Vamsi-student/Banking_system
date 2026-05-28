@@ -1,6 +1,6 @@
 import express from "express";
 import { authMiddleware,authSystemUserMiddleware } from "../middlewares/auth.middleware.js";
-import { createTransaction,createInitialFundsTransaction } from "../controllers/transaction.controller.js";
+import { createTransaction, getTransactionHistory, createInitialFundsTransaction } from "../controllers/transaction.controller.js";
 
 const transactionRoutes =express.Router();
 
@@ -9,6 +9,7 @@ const transactionRoutes =express.Router();
  * - Create a new transaction
  */
 
+transactionRoutes.get("/", authMiddleware, getTransactionHistory);
 transactionRoutes.post("/", authMiddleware,createTransaction);
 
 /**

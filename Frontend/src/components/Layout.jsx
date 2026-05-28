@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   Wallet,
   Send,
+  History,
   LogOut,
   User,
 } from "lucide-react"
@@ -19,6 +20,7 @@ import {
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/accounts", label: "Accounts", icon: Wallet },
+  { to: "/transactions", label: "History", icon: History },
   { to: "/transfer", label: "Transfer", icon: Send },
 ]
 
