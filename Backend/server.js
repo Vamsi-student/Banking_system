@@ -16,7 +16,7 @@ dns.setServers(["8.8.8.8", "8.8.4.4"]);
 
 import mongoose from "mongoose";
 import app from "./src/app.js";
-import { connectdb } from "./src/config/db.js";
+import { connectdb } from "./src/config/database.js";
 
 async function start() {
     try {

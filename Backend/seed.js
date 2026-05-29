@@ -5,7 +5,7 @@ import dns from "dns";
 dns.setServers(["8.8.8.8", "8.8.4.4"]);
 
 import mongoose from "mongoose";
-import { connectdb } from "./src/config/db.js";
+import { connectdb } from "./src/config/database.js";
 import userModel from "./src/models/user.model.js";
 import accountModel from "./src/models/account.model.js";
 
